@@ -1,21 +1,54 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <title>Flappy Bird Ultra</title>
   <style>
-    body { margin: 0; overflow: hidden; font-family: Arial; }
+    :root {
+      --game-max-width: 520px;
+      --game-radius: 24px;
+      --overlay-bg: rgba(0, 0, 0, 0.85);
+      --glow: 0 20px 60px rgba(0, 0, 0, 0.35);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      overflow: hidden;
+      font-family: "Segoe UI", Arial, sans-serif;
+      background: radial-gradient(circle at top, #132347, #050b18 65%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: clamp(12px, 4vw, 36px);
+      color: #fff;
+    }
+
+    .game-wrapper {
+      position: relative;
+      width: min(100%, var(--game-max-width));
+      max-width: var(--game-max-width);
+      height: auto;
+    }
+
     canvas {
       display: block;
-      width: 100vw;
-      height: 100vh;
+      width: 100%;
+      height: auto;
+      border-radius: var(--game-radius);
+      box-shadow: var(--glow);
+      background: #000;
     }
 
     #game-over-screen {
       position: absolute;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      background: rgba(0,0,0,0.85);
+      inset: 0;
+      border-radius: var(--game-radius);
+      background: var(--overlay-bg);
       backdrop-filter: blur(6px);
       display: flex;
       flex-direction: column;
@@ -24,52 +57,115 @@
       visibility: hidden;
       color: white;
       animation: fadeIn 0.6s ease;
+      padding: clamp(24px, 6vw, 48px);
+      text-align: center;
+    }
+
+    #game-over-img {
+      width: clamp(160px, 45vw, 240px);
+      margin-bottom: 20px;
+    }
+
+    #game-over-screen h1 {
+      font-size: clamp(32px, 8vw, 48px);
+      margin: 0;
+    }
+
+    #final-score {
+      font-size: clamp(20px, 6vw, 30px);
+      margin: 12px 0 20px;
     }
 
     #restart-btn {
-      padding: 14px 30px;
-      font-size: 24px;
+      width: min(100%, 280px);
+      padding: clamp(12px, 3.5vw, 16px);
+      font-size: clamp(18px, 4vw, 24px);
       border: none;
       background: linear-gradient(135deg, #ffcb00, #ff9500);
       color: #000;
-      border-radius: 12px;
+      border-radius: 14px;
       cursor: pointer;
-      margin-top: 20px;
-      transition: 0.2s;
+      transition: transform 0.2s, box-shadow 0.2s;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+    }
+
+    #restart-btn:active {
+      transform: scale(0.98);
     }
 
     #restart-btn:hover {
-      transform: scale(1.1);
+      transform: scale(1.04);
+    }
+
+    .hint {
+      margin-top: 18px;
+      font-size: clamp(15px, 3.5vw, 18px);
+      letter-spacing: 0.5px;
+      opacity: 0.85;
+      text-align: center;
     }
 
     @keyframes fadeIn {
       from { opacity: 0; }
       to { opacity: 1; }
     }
+
+    @media (max-width: 640px) {
+      :root {
+        --game-max-width: 100vw;
+        --game-radius: 0;
+      }
+
+      body {
+        padding: 0;
+        overflow: hidden;
+      }
+
+      .game-wrapper {
+        width: 100vw;
+        height: 100vh;
+      }
+
+      canvas {
+        width: 100vw;
+        height: 100vh;
+        border-radius: 0;
+      }
+
+      #game-over-screen {
+        border-radius: 0;
+      }
+
+      .hint {
+        font-size: 16px;
+        padding: 12px 18px;
+        background: rgba(0, 0, 0, 0.45);
+        border-radius: 999px;
+        position: absolute;
+        bottom: 18px;
+        left: 50%;
+        transform: translateX(-50%);
+        margin: 0;
+      }
+    }
   </style>
 </head>
 <body>
-  <canvas id="gameCanvas"></canvas>
+  <div class="game-wrapper">
+    <canvas id="gameCanvas" width="480" height="640" aria-label="Flappy Bird Ultra game canvas"></canvas>
 
-  <div id="game-over-screen">
-    <img id="game-over-img" src="gameover.png" style="width:220px; margin-bottom:20px;" />
-    <h1 style="font-size:48px; margin:0;">Game Over</h1>
-    <p id="final-score" style="font-size:28px; margin:10px 0 20px;"></p>
-    <button id="restart-btn">Restart</button>
+    <div id="game-over-screen" role="dialog" aria-modal="true">
+      <img id="game-over-img" src="gameover.png" alt="Game over" />
+      <h1>Game Over</h1>
+      <p id="final-score"></p>
+      <button id="restart-btn">Restart</button>
+    </div>
   </div>
+  <p class="hint">Tap / Click or press Space to flap</p>
 
 <script>
 // ------------------ BASE SETUP --------------------
 const canvas = document.getElementById("gameCanvas");
-// Resize for fullscreen mobile
-function resizeCanvas() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-}
-resizeCanvas();
-window.addEventListener('resize', resizeCanvas);
-
-const ctx = canvas.getContext("gameCanvas");
 const ctx = canvas.getContext("2d");
 
 const bg = new Image(); bg.src = "background.png";
@@ -79,6 +175,13 @@ const pipeImg = new Image(); pipeImg.src = "sushila.png";
 const flapSound = new Audio("flap.mp3");
 const bgMusic = new Audio("background.mp3"); bgMusic.loop = true;
 const hitSound = new Audio("hit.mp3");
+
+function tryPlay(audio) {
+  const attempt = audio.play();
+  if (attempt && typeof attempt.catch === "function") {
+    attempt.catch(() => {});
+  }
+}
 
 // ------------------ GAME OBJECTS --------------------
 let bird = {
@@ -97,6 +200,29 @@ let frame = 0;
 let score = 0;
 let gameOver = false;
 let pipeGap = 160;
+let pipeSpeed = 3;
+
+const viewportQuery = window.matchMedia("(max-width: 640px)");
+const physicsPresets = {
+  desktop: { gravity: 0.38, lift: -7.2, gap: 160, speed: 3 },
+  mobile: { gravity: 0.3, lift: -6.3, gap: 178, speed: 2.6 }
+};
+
+function syncPhysicsWithViewport() {
+  const preset = viewportQuery.matches ? physicsPresets.mobile : physicsPresets.desktop;
+  bird.gravity = preset.gravity;
+  bird.lift = preset.lift;
+  pipeGap = preset.gap;
+  pipeSpeed = preset.speed;
+}
+
+syncPhysicsWithViewport();
+
+if (typeof viewportQuery.addEventListener === "function") {
+  viewportQuery.addEventListener("change", syncPhysicsWithViewport);
+} else if (typeof viewportQuery.addListener === "function") {
+  viewportQuery.addListener(syncPhysicsWithViewport);
+}
 
 // ------------------ PHYSICS --------------------
 function updateBird() {
@@ -131,7 +257,7 @@ function drawPipes() {
 
 function updatePipes() {
   pipes.forEach(p => {
-    p.x -= 3;
+    p.x -= pipeSpeed;
 
     if (p.x + p.width < bird.x && !p.passed) {
       p.passed = true;
@@ -181,26 +307,41 @@ function flap() {
   if (gameOver) return;
   bird.velocity = bird.lift;
   flapSound.currentTime = 0;
-  flapSound.play();
+  tryPlay(flapSound);
 }
 
-document.addEventListener("keydown", e => { if (e.code === "Space") flap(); });
-document.addEventListener("mousedown", () => {
+function handleInput(event) {
+  if (event) event.preventDefault();
   startGameAudio();
   flap();
+}
+
+document.addEventListener("keydown", e => {
+  if (e.code === "Space") {
+    e.preventDefault();
+    handleInput();
+  }
 });
 
-document.addEventListener("touchstart", () => {
-  startGameAudio();
-  flap();
-});, flap);
+if (window.PointerEvent) {
+  window.addEventListener("pointerdown", e => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    handleInput(e);
+  }, { passive: false });
+} else {
+  window.addEventListener("mousedown", e => {
+    if (e.button !== 0) return;
+    handleInput(e);
+  });
+  window.addEventListener("touchstart", e => handleInput(e), { passive: false });
+}
 
 // ------------------ END GAME --------------------
 function endGame() {
   gameOver = true;
   bgMusic.pause();
   hitSound.currentTime = 0;
-  hitSound.play();
+  tryPlay(hitSound);
 
   document.getElementById("final-score").innerText = "Score: " + score;
   document.getElementById("game-over-screen").style.visibility = "visible";
@@ -221,7 +362,7 @@ document.getElementById("restart-btn").onclick = () => {
 
   document.getElementById("game-over-screen").style.visibility = "hidden";
   bgMusic.currentTime = 0;
-  bgMusic.play();
+  tryPlay(bgMusic);
   loop();
 };
 
@@ -229,28 +370,16 @@ document.getElementById("restart-btn").onclick = () => {
 let started = false;
 function startGameAudio() {
   if (!started) {
-    bgMusic.play();
     started = true;
+    tryPlay(bgMusic);
   }
 }
 
-document.addEventListener("keydown", e => {
-  if (e.code === "Space") {
-    startGameAudio();
-    flap();
-  }
-});
-
-document.addEventListener("mousedown", () => {
-  startGameAudio();
-  flap();
-});
-
 // ------------------ START --------------------
 bg.onload = () => {
-  bgMusic.play();
   loop();
 };
 </script>
 </body>
 </html>
+
